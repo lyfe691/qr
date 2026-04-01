@@ -5,3 +5,8 @@ node_modules/
 coverage/
 pnpm-lock.yaml
 .pnpm-store/
+
+# not necessary
+components/ui/
+hooks/use-mobile.ts
+lib/utils.ts
