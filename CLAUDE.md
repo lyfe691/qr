@@ -47,6 +47,3 @@ This app must have a super clean, polished, distinctive design. Not generic AI-g
 
 ## SEO
 - Use the `seo-audit` skill when adding or modifying pages, metadata, or public-facing routes.
-
-## Contributing
-Direct pushes to `main` are blocked. All changes go through pull requests.
