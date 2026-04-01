@@ -11,6 +11,7 @@ export interface QRConfig {
   cornerDotStyle: CornerDotType
   fgColor: string
   bgColor: string
+  transparentBg: boolean
   useGradient: boolean
   gradientColor1: string
   gradientColor2: string
@@ -35,6 +36,7 @@ export const DEFAULT_CONFIG: QRConfig = {
   cornerDotStyle: "dot",
   fgColor: "#1a1a2e",
   bgColor: "#ffffff",
+  transparentBg: false,
   useGradient: false,
   gradientColor1: "#1a1a2e",
   gradientColor2: "#6c5ce7",

@@ -108,7 +108,7 @@ function ColorInput({
         <Input
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="h-7 w-[5.5rem] font-mono text-xs"
+          className="h-7 w-22 font-mono text-xs"
         />
         <label
           className="relative size-7 shrink-0 cursor-pointer rounded-md border shadow-xs"
@@ -181,7 +181,9 @@ export function QRGenerator() {
         type: cfg.cornerDotStyle,
         color: cfg.fgColor,
       },
-      backgroundOptions: { color: cfg.bgColor },
+      backgroundOptions: cfg.transparentBg
+        ? { color: "transparent" }
+        : { color: cfg.bgColor },
       imageOptions: {
         crossOrigin: "anonymous",
         margin: 4,
@@ -358,11 +360,16 @@ export function QRGenerator() {
         {/* Preview */}
         <div className="flex flex-col items-center gap-6">
           <div
-            className="flex items-center justify-center rounded-2xl border p-4 shadow-xs transition-all"
+            className={cn(
+              "flex items-center justify-center rounded-2xl border p-4 shadow-xs transition-all",
+              config.transparentBg && "bg-checkerboard"
+            )}
             style={{
               minWidth: 200,
               minHeight: 200,
-              backgroundColor: config.bgColor,
+              ...(!config.transparentBg && {
+                backgroundColor: config.bgColor,
+              }),
             }}
           >
             <div
@@ -680,6 +687,17 @@ export function QRGenerator() {
                 onChange={(v) => update("bgColor", v)}
                 label="Background"
               />
+
+              <div className="flex items-center justify-between">
+                <Label className="text-xs text-muted-foreground">
+                  Transparent Background
+                </Label>
+                <Switch
+                  checked={config.transparentBg}
+                  onCheckedChange={(v) => update("transparentBg", v)}
+                  size="sm"
+                />
+              </div>
 
               <Separator />
 
