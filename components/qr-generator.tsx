@@ -25,6 +25,9 @@ import {
   Palette,
   Shapes,
   Settings2,
+  RotateCcw,
+  Clock,
+  Trash2,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -48,46 +51,15 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
+import { cn } from "@/lib/utils"
+import {
+  DEFAULT_CONFIG,
+  type QRConfig,
+  type ErrorCorrectionLevel,
+} from "@/lib/qr-config"
+import { useQRHistory } from "@/hooks/use-qr-history"
 
-// --- Types ---
-
-type ErrorCorrectionLevel = "L" | "M" | "Q" | "H"
-
-interface QRConfig {
-  data: string
-  size: number
-  errorLevel: ErrorCorrectionLevel
-  dotStyle: DotType
-  cornerSquareStyle: CornerSquareType
-  cornerDotStyle: CornerDotType
-  fgColor: string
-  bgColor: string
-  useGradient: boolean
-  gradientColor1: string
-  gradientColor2: string
-  gradientType: "linear" | "radial"
-  logo: string | null
-  logoSize: number
-  margin: number
-}
-
-const DEFAULT_CONFIG: QRConfig = {
-  data: "",
-  size: 300,
-  errorLevel: "Q",
-  dotStyle: "rounded",
-  cornerSquareStyle: "extra-rounded",
-  cornerDotStyle: "dot",
-  fgColor: "#1a1a2e",
-  bgColor: "#ffffff",
-  useGradient: false,
-  gradientColor1: "#1a1a2e",
-  gradientColor2: "#6c5ce7",
-  gradientType: "linear",
-  logo: null,
-  logoSize: 0.35,
-  margin: 12,
-}
+// --- Constants ---
 
 const DOT_STYLES: { value: DotType; label: string }[] = [
   { value: "square", label: "Square" },
@@ -116,7 +88,7 @@ const ERROR_LEVELS: { value: ErrorCorrectionLevel; label: string }[] = [
   { value: "H", label: "High (30%)" },
 ]
 
-// --- Color Swatch ---
+// --- Color Picker ---
 
 function ColorInput({
   value,
@@ -128,26 +100,25 @@ function ColorInput({
   label: string
 }) {
   return (
-    <div className="flex items-center gap-3">
-      <label className="relative">
-        <input
-          type="color"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="absolute inset-0 cursor-pointer opacity-0"
-        />
-        <div
-          className="size-8 rounded-lg border shadow-xs transition-colors"
-          style={{ backgroundColor: value }}
-        />
-      </label>
-      <div className="flex flex-col gap-0.5">
-        <span className="text-xs text-muted-foreground">{label}</span>
+    <div className="flex items-center justify-between">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <div className="flex items-center gap-2">
         <Input
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="h-7 w-24 font-mono text-xs"
+          className="h-7 w-[5.5rem] font-mono text-xs"
         />
+        <label
+          className="relative size-7 shrink-0 cursor-pointer rounded-md border shadow-xs"
+          style={{ backgroundColor: value }}
+        >
+          <input
+            type="color"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className="absolute inset-0 cursor-pointer opacity-0"
+          />
+        </label>
       </div>
     </div>
   )
@@ -158,9 +129,12 @@ function ColorInput({
 export function QRGenerator() {
   const [config, setConfig] = useState<QRConfig>(DEFAULT_CONFIG)
   const [copied, setCopied] = useState(false)
+  const [isDraggingLogo, setIsDraggingLogo] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
   const qrRef = useRef<HTMLDivElement>(null)
   const qrCodeRef = useRef<QRCodeStyling | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const history = useQRHistory()
 
   const hasValue = config.data.trim().length > 0
   const isUrl = hasValue && /^https?:\/\/.+/i.test(config.data.trim())
@@ -174,19 +148,16 @@ export function QRGenerator() {
 
   // Build qr-code-styling options from config
   const buildOptions = useCallback((cfg: QRConfig): Partial<Options> => {
-    const dotsOptions: Options["dotsOptions"] = cfg.useGradient
+    const gradient = cfg.useGradient
       ? {
-          type: cfg.dotStyle,
-          gradient: {
-            type: cfg.gradientType,
-            rotation: Math.PI / 4,
-            colorStops: [
-              { offset: 0, color: cfg.gradientColor1 },
-              { offset: 1, color: cfg.gradientColor2 },
-            ],
-          },
+          type: cfg.gradientType as "linear" | "radial",
+          rotation: Math.PI / 4,
+          colorStops: [
+            { offset: 0, color: cfg.gradientColor1 },
+            { offset: 1, color: cfg.gradientColor2 },
+          ],
         }
-      : { type: cfg.dotStyle, color: cfg.fgColor }
+      : undefined
 
     return {
       data: cfg.data || "https://example.com",
@@ -194,14 +165,19 @@ export function QRGenerator() {
       height: cfg.size,
       margin: cfg.margin,
       type: "svg",
-      dotsOptions,
+      dotsOptions: {
+        type: cfg.dotStyle,
+        color: cfg.fgColor,
+        gradient,
+      },
       cornersSquareOptions: {
         type: cfg.cornerSquareStyle,
-        color: cfg.useGradient ? cfg.gradientColor1 : cfg.fgColor,
+        color: cfg.fgColor,
+        gradient,
       },
       cornersDotOptions: {
         type: cfg.cornerDotStyle,
-        color: cfg.useGradient ? cfg.gradientColor2 : cfg.fgColor,
+        color: cfg.fgColor,
       },
       backgroundOptions: { color: cfg.bgColor },
       imageOptions: {
@@ -236,7 +212,6 @@ export function QRGenerator() {
     return () => {
       cancelled = true
     }
-    // Only run once on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -246,23 +221,55 @@ export function QRGenerator() {
     qrCodeRef.current.update(buildOptions(config))
   }, [config, buildOptions])
 
-  // Logo upload handler
+  // --- Reset ---
+
+  const resetConfig = useCallback(() => {
+    setConfig((prev) => ({ ...DEFAULT_CONFIG, data: prev.data }))
+    if (fileInputRef.current) fileInputRef.current.value = ""
+    toast.success("Reset to defaults")
+  }, [])
+
+  // --- Logo upload ---
+
+  const loadLogoFile = useCallback((file: File) => {
+    if (!file.type.startsWith("image/")) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      setConfig((prev) => ({
+        ...prev,
+        logo: reader.result as string,
+        errorLevel: prev.errorLevel !== "H" ? "H" : prev.errorLevel,
+      }))
+    }
+    reader.readAsDataURL(file)
+  }, [])
+
   const handleLogoUpload = useCallback(
     (e: ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0]
-      if (!file) return
-
-      const reader = new FileReader()
-      reader.onload = () => {
-        update("logo", reader.result as string)
-        // When adding a logo, bump error correction to H for reliability
-        if (config.errorLevel !== "H") {
-          update("errorLevel", "H")
-        }
-      }
-      reader.readAsDataURL(file)
+      if (file) loadLogoFile(file)
     },
-    [update, config.errorLevel]
+    [loadLogoFile]
+  )
+
+  const handleLogoDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDraggingLogo(true)
+  }, [])
+
+  const handleLogoDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDraggingLogo(false)
+  }, [])
+
+  const handleLogoDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault()
+      setIsDraggingLogo(false)
+      const file = e.dataTransfer.files?.[0]
+      if (file) loadLogoFile(file)
+    },
+    [loadLogoFile]
   )
 
   const removeLogo = useCallback(() => {
@@ -270,24 +277,41 @@ export function QRGenerator() {
     if (fileInputRef.current) fileInputRef.current.value = ""
   }, [update])
 
-  // Download handlers
+  // --- Save to history (called on download/copy) ---
+
+  const saveToHistory = useCallback(async () => {
+    if (!qrCodeRef.current || !hasValue) return
+    let thumbnail: string | null = null
+    try {
+      const blob = await qrCodeRef.current.getRawData("png")
+      if (blob) {
+        thumbnail = await new Promise<string>((resolve) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(reader.result as string)
+          reader.readAsDataURL(blob as Blob)
+        })
+      }
+    } catch {
+      // Thumbnail is optional
+    }
+    history.save(config, thumbnail)
+  }, [config, hasValue, history])
+
+  // --- Download handlers ---
+
   const downloadPNG = useCallback(async () => {
     if (!qrCodeRef.current) return
-    await qrCodeRef.current.download({
-      name: "qr-code",
-      extension: "png",
-    })
+    await qrCodeRef.current.download({ name: "qr-code", extension: "png" })
     toast.success("PNG downloaded")
-  }, [])
+    void saveToHistory()
+  }, [saveToHistory])
 
   const downloadSVG = useCallback(async () => {
     if (!qrCodeRef.current) return
-    await qrCodeRef.current.download({
-      name: "qr-code",
-      extension: "svg",
-    })
+    await qrCodeRef.current.download({ name: "qr-code", extension: "svg" })
     toast.success("SVG downloaded")
-  }, [])
+    void saveToHistory()
+  }, [saveToHistory])
 
   const copyToClipboard = useCallback(async () => {
     if (!qrCodeRef.current) return
@@ -299,7 +323,8 @@ export function QRGenerator() {
     setCopied(true)
     toast.success("Copied to clipboard")
     setTimeout(() => setCopied(false), 2000)
-  }, [])
+    void saveToHistory()
+  }, [saveToHistory])
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-10 sm:px-6 md:py-16">
@@ -334,8 +359,12 @@ export function QRGenerator() {
         {/* Preview */}
         <div className="flex flex-col items-center gap-6">
           <div
-            className="flex items-center justify-center rounded-2xl border bg-white p-4 shadow-xs transition-all"
-            style={{ minWidth: 200, minHeight: 200 }}
+            className="flex items-center justify-center rounded-2xl border p-4 shadow-xs transition-all"
+            style={{
+              minWidth: 200,
+              minHeight: 200,
+              backgroundColor: config.bgColor,
+            }}
           >
             <div
               ref={qrRef}
@@ -353,7 +382,7 @@ export function QRGenerator() {
                   PNG
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Download as PNG</TooltipContent>
+              <TooltipContent side="left">Download as PNG</TooltipContent>
             </Tooltip>
 
             <Tooltip>
@@ -368,7 +397,7 @@ export function QRGenerator() {
                   SVG
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Download as SVG</TooltipContent>
+              <TooltipContent side="top">Download as SVG</TooltipContent>
             </Tooltip>
 
             <Tooltip>
@@ -387,28 +416,109 @@ export function QRGenerator() {
                   Copy
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Copy image to clipboard</TooltipContent>
+              <TooltipContent side="right">
+                Copy image to clipboard
+              </TooltipContent>
             </Tooltip>
           </div>
+
+          {/* History */}
+          {history.entries.length > 0 && (
+            <div className="w-full max-w-md">
+              <button
+                type="button"
+                onClick={() => setShowHistory((v) => !v)}
+                className="flex w-full items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <Clock className="size-3.5" />
+                Recent ({history.entries.length})
+                <span className="ml-auto text-[10px]">
+                  {showHistory ? "Hide" : "Show"}
+                </span>
+              </button>
+
+              {showHistory && (
+                <div className="mt-3 flex flex-col gap-2">
+                  {history.entries.map((entry) => (
+                    <div
+                      key={entry.timestamp}
+                      className="flex items-center gap-3 rounded-lg border p-2 transition-colors hover:bg-accent/50"
+                    >
+                      {entry.thumbnail && (
+                        /* eslint-disable-next-line @next/next/no-img-element -- base64 thumbnail */
+                        <img
+                          src={entry.thumbnail}
+                          alt=""
+                          className="size-9 rounded border object-contain"
+                        />
+                      )}
+                      <button
+                        type="button"
+                        className="min-w-0 flex-1 text-left"
+                        onClick={() => setConfig(entry.config)}
+                      >
+                        <p className="truncate text-sm">{entry.config.data}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {new Date(entry.timestamp).toLocaleDateString()}
+                        </p>
+                      </button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-6 shrink-0"
+                        onClick={() => history.remove(entry.timestamp)}
+                      >
+                        <X className="size-3" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs text-muted-foreground"
+                    onClick={history.clear}
+                  >
+                    <Trash2 className="size-3" />
+                    Clear history
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Controls Panel */}
         <div className="rounded-2xl border bg-card p-4 shadow-xs">
           <Tabs defaultValue="style">
-            <TabsList className="w-full">
-              <TabsTrigger value="style">
-                <Shapes className="size-3.5" />
-                Style
-              </TabsTrigger>
-              <TabsTrigger value="colors">
-                <Palette className="size-3.5" />
-                Colors
-              </TabsTrigger>
-              <TabsTrigger value="settings">
-                <Settings2 className="size-3.5" />
-                Settings
-              </TabsTrigger>
-            </TabsList>
+            <div className="flex items-center gap-2">
+              <TabsList className="flex-1">
+                <TabsTrigger value="style">
+                  <Shapes className="size-3.5" />
+                  Style
+                </TabsTrigger>
+                <TabsTrigger value="colors">
+                  <Palette className="size-3.5" />
+                  Colors
+                </TabsTrigger>
+                <TabsTrigger value="settings">
+                  <Settings2 className="size-3.5" />
+                  Settings
+                </TabsTrigger>
+              </TabsList>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8 shrink-0"
+                    onClick={resetConfig}
+                  >
+                    <RotateCcw className="size-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Reset to defaults</TooltipContent>
+              </Tooltip>
+            </div>
 
             {/* Style Tab */}
             <TabsContent value="style" className="flex flex-col gap-5 pt-4">
@@ -487,13 +597,14 @@ export function QRGenerator() {
 
               <Separator />
 
-              {/* Logo Upload */}
+              {/* Logo Upload with Drag-and-Drop */}
               <div className="flex flex-col gap-2.5">
                 <Label className="text-xs text-muted-foreground">
                   Center Logo
                 </Label>
                 {config.logo ? (
                   <div className="flex items-center gap-3">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- user-uploaded base64 data URL */}
                     <img
                       src={config.logo}
                       alt="Logo"
@@ -526,14 +637,23 @@ export function QRGenerator() {
                     </Button>
                   </div>
                 ) : (
-                  <Button
-                    variant="secondary"
-                    className="w-full"
+                  <div
+                    onDragOver={handleLogoDragOver}
+                    onDragLeave={handleLogoDragLeave}
+                    onDrop={handleLogoDrop}
                     onClick={() => fileInputRef.current?.click()}
+                    className={cn(
+                      "flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed px-4 py-5 text-center transition-colors",
+                      isDraggingLogo
+                        ? "border-primary bg-primary/5"
+                        : "border-muted-foreground/20 hover:border-muted-foreground/40"
+                    )}
                   >
-                    <ImagePlus className="size-4" />
-                    Upload Logo
-                  </Button>
+                    <ImagePlus className="size-5 text-muted-foreground" />
+                    <p className="text-xs text-muted-foreground">
+                      Drop an image or click to upload
+                    </p>
+                  </div>
                 )}
                 <input
                   ref={fileInputRef}
