@@ -14,15 +14,30 @@ const fontMono = Geist_Mono({
   variable: "--font-mono",
 })
 
+const siteUrl = "https://qr.ysz.life"
+const title = "QR — Create QR Codes"
+const description =
+  "A clean, fast QR code generator. Paste a link or type text, customize the style, and download your QR code instantly."
+
 export const metadata: Metadata = {
-  title: "QR — Create QR Codes",
-  description:
-    "A clean, fast QR code generator. Paste a link or type text, customize, and download your QR code instantly.",
+  metadataBase: new URL(siteUrl),
+  title,
+  description,
   openGraph: {
-    title: "QR — Create QR Codes",
-    description:
-      "A clean, fast QR code generator. Paste a link or type text, customize, and download your QR code instantly.",
+    title,
+    description,
+    url: siteUrl,
+    siteName: "QR",
     type: "website",
+    locale: "en_US",
+  },
+  twitter: {
+    card: "summary",
+    title,
+    description,
+  },
+  icons: {
+    icon: "/favicon.svg",
   },
 }
 
