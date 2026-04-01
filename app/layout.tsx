@@ -1,4 +1,4 @@
-import { Geist, Geist_Mono, Outfit } from "next/font/google"
+import { Geist_Mono, Outfit } from "next/font/google"
 
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
@@ -24,7 +24,7 @@ export default function RootLayout({
       className={cn("antialiased", fontMono.variable, "font-sans", outfit.variable)}
     >
       <body>
-        <ThemeProvider>
+        <ThemeProvider forcedTheme="light" enableSystem={false}>
           <TooltipProvider>{children}</TooltipProvider>
         </ThemeProvider>
       </body>
