@@ -54,6 +54,8 @@ import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
 import {
   DEFAULT_CONFIG,
+  PLACEHOLDER_DATA,
+  isUrl as checkIsUrl,
   type QRConfig,
   type ErrorCorrectionLevel,
 } from "@/lib/qr-config"
@@ -137,7 +139,7 @@ export function QRGenerator() {
   const history = useQRHistory()
 
   const hasValue = config.data.trim().length > 0
-  const isUrl = hasValue && /^https?:\/\/.+/i.test(config.data.trim())
+  const isUrl = hasValue && checkIsUrl(config.data)
 
   const update = useCallback(
     <K extends keyof QRConfig>(key: K, value: QRConfig[K]) => {
@@ -160,7 +162,7 @@ export function QRGenerator() {
       : undefined
 
     return {
-      data: cfg.data || "https://example.com",
+      data: cfg.data || PLACEHOLDER_DATA,
       width: cfg.size,
       height: cfg.size,
       margin: cfg.margin,
@@ -219,7 +221,8 @@ export function QRGenerator() {
   useEffect(() => {
     if (!qrCodeRef.current) return
     qrCodeRef.current.update(buildOptions(config))
-  }, [config, buildOptions])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- buildOptions is stable (empty deps)
+  }, [config])
 
   // --- Reset ---
 
@@ -299,19 +302,15 @@ export function QRGenerator() {
 
   // --- Download handlers ---
 
-  const downloadPNG = useCallback(async () => {
-    if (!qrCodeRef.current) return
-    await qrCodeRef.current.download({ name: "qr-code", extension: "png" })
-    toast.success("PNG downloaded")
-    void saveToHistory()
-  }, [saveToHistory])
-
-  const downloadSVG = useCallback(async () => {
-    if (!qrCodeRef.current) return
-    await qrCodeRef.current.download({ name: "qr-code", extension: "svg" })
-    toast.success("SVG downloaded")
-    void saveToHistory()
-  }, [saveToHistory])
+  const download = useCallback(
+    async (extension: "png" | "svg") => {
+      if (!qrCodeRef.current) return
+      await qrCodeRef.current.download({ name: "qr-code", extension })
+      toast.success(`${extension.toUpperCase()} downloaded`)
+      saveToHistory()
+    },
+    [saveToHistory]
+  )
 
   const copyToClipboard = useCallback(async () => {
     if (!qrCodeRef.current) return
@@ -323,7 +322,7 @@ export function QRGenerator() {
     setCopied(true)
     toast.success("Copied to clipboard")
     setTimeout(() => setCopied(false), 2000)
-    void saveToHistory()
+    saveToHistory()
   }, [saveToHistory])
 
   return (
@@ -377,7 +376,11 @@ export function QRGenerator() {
           <div className="flex flex-wrap items-center justify-center gap-2">
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button onClick={downloadPNG} disabled={!hasValue} size="sm">
+                <Button
+                  onClick={() => download("png")}
+                  disabled={!hasValue}
+                  size="sm"
+                >
                   <Download className="size-3.5" />
                   PNG
                 </Button>
@@ -389,7 +392,7 @@ export function QRGenerator() {
               <TooltipTrigger asChild>
                 <Button
                   variant="secondary"
-                  onClick={downloadSVG}
+                  onClick={() => download("svg")}
                   disabled={!hasValue}
                   size="sm"
                 >

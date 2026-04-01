@@ -20,6 +20,12 @@ export interface QRConfig {
   margin: number
 }
 
+export const PLACEHOLDER_DATA = "https://example.com"
+
+export function isUrl(text: string): boolean {
+  return /^https?:\/\/.+/i.test(text.trim())
+}
+
 export const DEFAULT_CONFIG: QRConfig = {
   data: "",
   size: 300,

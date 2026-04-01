@@ -10,6 +10,7 @@ import {
   XCircle,
 } from "lucide-react"
 
+import { isUrl } from "@/lib/qr-config"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -47,8 +48,7 @@ export function QRScanTest() {
         returnDetailedScanResult: true,
       })
       const data = scanResult.data
-      const isUrl = /^https?:\/\/.+/i.test(data)
-      setResult({ data, isUrl })
+      setResult({ data, isUrl: isUrl(data) })
     } catch {
       setError("No QR code found in this image.")
     }
