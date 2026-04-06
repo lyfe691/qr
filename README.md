@@ -1,44 +1,48 @@
-# Next.js template
+# QR
 
-This is a Next.js template with shadcn/ui.
+A clean, fast QR code generator. Paste a link or type text, customize the style, and download instantly.
 
-## Adding components
+**[qr.ysz.life](https://qr.ysz.life)**
 
-To add components to your app, run the following command:
+## Features
+
+- **Live preview** — see changes as you type
+- **Dot & corner styles** — rounded, classy, square, dots, and more
+- **Shape** — square or circle QR codes
+- **Colors** — foreground, background, and independent corner eye colors
+- **Gradients** — linear or radial gradients for foreground and background with angle control
+- **Transparent background** — for overlaying on any surface
+- **Logo upload** — drag-and-drop or file picker, with adjustable size
+- **Export** — PNG, SVG, JPEG, or WebP
+- **Copy to clipboard** — one click
+- **History** — recent codes saved locally, restore with a click
+- **Dark mode** — toggle with `d`
+
+## Tech Stack
+
+Next.js 16 · React 19 · TypeScript · Tailwind CSS v4 · shadcn/ui · qr-code-styling
+
+## Development
 
 ```bash
-npx shadcn@latest add button
-```
-
-This will place the ui components in the `components` directory.
-
-## Using components
-
-To use the components in your app, import them as follows:
-
-```tsx
-import { Button } from "@/components/ui/button";
+pnpm install
+pnpm dev
 ```
 
 ## Contributing
 
 Direct pushes to `main` are restricted. To contribute:
 
-1. Clone the repo (if you haven't already)
+1. Clone the repo
    ```bash
    git clone https://github.com/lyfe691/qr.git
    ```
-2. Create a new branch
+2. Create a branch
    ```bash
    git checkout -b my-feature
    ```
-3. Make your changes and commit
-   ```bash
-   git add .
-   git commit -m "feat: description of changes"
-   ```
-4. Push your branch
+3. Make your changes, commit, and push
    ```bash
    git push origin my-feature
    ```
-5. Open a Pull Request on GitHub — lyfe will review it.
+4. Open a Pull Request on GitHub.
