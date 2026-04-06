@@ -13,6 +13,7 @@ import type {
   DotType,
   CornerSquareType,
   CornerDotType,
+  ShapeType,
 } from "qr-code-styling"
 import {
   Download,
@@ -28,6 +29,8 @@ import {
   RotateCcw,
   Clock,
   Trash2,
+  Circle,
+  Square,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -75,12 +78,30 @@ const DOT_STYLES: { value: DotType; label: string }[] = [
 const CORNER_SQUARE_STYLES: { value: CornerSquareType; label: string }[] = [
   { value: "square", label: "Square" },
   { value: "dot", label: "Dot" },
-  { value: "extra-rounded", label: "Rounded" },
+  { value: "extra-rounded", label: "Extra Rounded" },
+  { value: "rounded", label: "Rounded" },
+  { value: "dots", label: "Dots" },
+  { value: "classy", label: "Classy" },
+  { value: "classy-rounded", label: "Classy Rounded" },
 ]
 
 const CORNER_DOT_STYLES: { value: CornerDotType; label: string }[] = [
   { value: "square", label: "Square" },
   { value: "dot", label: "Dot" },
+  { value: "rounded", label: "Rounded" },
+  { value: "dots", label: "Dots" },
+  { value: "classy", label: "Classy" },
+  { value: "classy-rounded", label: "Classy Rounded" },
+  { value: "extra-rounded", label: "Extra Rounded" },
+]
+
+const SHAPE_OPTIONS: {
+  value: ShapeType
+  label: string
+  icon: typeof Square
+}[] = [
+  { value: "square", label: "Square", icon: Square },
+  { value: "circle", label: "Circle", icon: Circle },
 ]
 
 const ERROR_LEVELS: { value: ErrorCorrectionLevel; label: string }[] = [
@@ -136,7 +157,12 @@ export function QRGenerator() {
   const qrRef = useRef<HTMLDivElement>(null)
   const qrCodeRef = useRef<QRCodeStyling | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const history = useQRHistory()
+  const {
+    entries: historyEntries,
+    save: historySave,
+    remove: historyRemove,
+    clear: historyClear,
+  } = useQRHistory()
 
   const hasValue = config.data.trim().length > 0
   const isUrl = hasValue && checkIsUrl(config.data)
@@ -150,10 +176,11 @@ export function QRGenerator() {
 
   // Build qr-code-styling options from config
   const buildOptions = useCallback((cfg: QRConfig): Partial<Options> => {
-    const gradient = cfg.useGradient
+    const rotationRad = (cfg.gradientRotation * Math.PI) / 180
+    const fgGradient = cfg.useGradient
       ? {
           type: cfg.gradientType as "linear" | "radial",
-          rotation: Math.PI / 4,
+          rotation: rotationRad,
           colorStops: [
             { offset: 0, color: cfg.gradientColor1 },
             { offset: 1, color: cfg.gradientColor2 },
@@ -161,29 +188,45 @@ export function QRGenerator() {
         }
       : undefined
 
+    const cornerColor = cfg.useCornerColor ? cfg.cornerColor : cfg.fgColor
+
+    const bgRotationRad = (cfg.bgGradientRotation * Math.PI) / 180
+    const bgGradient =
+      !cfg.transparentBg && cfg.bgUseGradient
+        ? {
+            type: cfg.bgGradientType as "linear" | "radial",
+            rotation: bgRotationRad,
+            colorStops: [
+              { offset: 0, color: cfg.bgGradientColor1 },
+              { offset: 1, color: cfg.bgGradientColor2 },
+            ],
+          }
+        : undefined
+
     return {
       data: cfg.data || PLACEHOLDER_DATA,
       width: cfg.size,
       height: cfg.size,
       margin: cfg.margin,
       type: "svg",
+      shape: cfg.shape,
       dotsOptions: {
         type: cfg.dotStyle,
         color: cfg.fgColor,
-        gradient,
+        gradient: fgGradient,
       },
       cornersSquareOptions: {
         type: cfg.cornerSquareStyle,
-        color: cfg.fgColor,
-        gradient,
+        color: cornerColor,
       },
       cornersDotOptions: {
         type: cfg.cornerDotStyle,
-        color: cfg.fgColor,
+        color: cornerColor,
       },
-      backgroundOptions: cfg.transparentBg
-        ? { color: "transparent" }
-        : { color: cfg.bgColor },
+      backgroundOptions: {
+        color: cfg.transparentBg ? "transparent" : cfg.bgColor,
+        gradient: bgGradient,
+      },
       imageOptions: {
         crossOrigin: "anonymous",
         margin: 4,
@@ -195,36 +238,33 @@ export function QRGenerator() {
     }
   }, [])
 
-  // Initialize QR code instance
+  // Load the library once
+  const qrLibRef = useRef<typeof QRCodeStyling | null>(null)
+  const [libReady, setLibReady] = useState(false)
+
   useEffect(() => {
     let cancelled = false
-
-    async function init() {
-      const QRCodeStylingLib = (await import("qr-code-styling")).default
+    import("qr-code-styling").then((mod) => {
       if (cancelled) return
-
-      const instance = new QRCodeStylingLib(buildOptions(config))
-      qrCodeRef.current = instance
-
-      if (qrRef.current) {
-        qrRef.current.innerHTML = ""
-        instance.append(qrRef.current)
-      }
-    }
-
-    init()
+      qrLibRef.current = mod.default
+      setLibReady(true)
+    })
     return () => {
       cancelled = true
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Update QR code when config changes
+  // Recreate instance on every config change (avoids deep-merge bugs in .update())
   useEffect(() => {
-    if (!qrCodeRef.current) return
-    qrCodeRef.current.update(buildOptions(config))
+    const Lib = qrLibRef.current
+    if (!Lib || !qrRef.current) return
+
+    const instance = new Lib(buildOptions(config))
+    qrRef.current.innerHTML = ""
+    instance.append(qrRef.current)
+    qrCodeRef.current = instance
     // eslint-disable-next-line react-hooks/exhaustive-deps -- buildOptions is stable (empty deps)
-  }, [config])
+  }, [config, libReady])
 
   // --- Reset ---
 
@@ -284,28 +324,31 @@ export function QRGenerator() {
 
   // --- Save to history (called on download/copy) ---
 
-  const saveToHistory = useCallback(async () => {
-    if (!qrCodeRef.current || !hasValue) return
-    let thumbnail: string | null = null
-    try {
-      const blob = await qrCodeRef.current.getRawData("png")
-      if (blob) {
-        thumbnail = await new Promise<string>((resolve) => {
-          const reader = new FileReader()
-          reader.onload = () => resolve(reader.result as string)
-          reader.readAsDataURL(blob as Blob)
-        })
+  const saveToHistory = useCallback(
+    async (existingBlob?: Blob) => {
+      if (!qrCodeRef.current || !hasValue) return
+      let thumbnail: string | null = null
+      try {
+        const blob = existingBlob ?? (await qrCodeRef.current.getRawData("png"))
+        if (blob) {
+          thumbnail = await new Promise<string>((resolve) => {
+            const reader = new FileReader()
+            reader.onload = () => resolve(reader.result as string)
+            reader.readAsDataURL(blob as Blob)
+          })
+        }
+      } catch {
+        // Thumbnail is optional
       }
-    } catch {
-      // Thumbnail is optional
-    }
-    history.save(config, thumbnail)
-  }, [config, hasValue, history])
+      historySave(config, thumbnail)
+    },
+    [config, hasValue, historySave]
+  )
 
   // --- Download handlers ---
 
   const download = useCallback(
-    async (extension: "png" | "svg") => {
+    async (extension: "png" | "svg" | "jpeg" | "webp") => {
       if (!qrCodeRef.current) return
       await qrCodeRef.current.download({ name: "qr-code", extension })
       toast.success(`${extension.toUpperCase()} downloaded`)
@@ -324,7 +367,7 @@ export function QRGenerator() {
     setCopied(true)
     toast.success("Copied to clipboard")
     setTimeout(() => setCopied(false), 2000)
-    saveToHistory()
+    saveToHistory(blob as Blob)
   }, [saveToHistory])
 
   return (
@@ -414,6 +457,36 @@ export function QRGenerator() {
               <TooltipTrigger asChild>
                 <Button
                   variant="secondary"
+                  onClick={() => download("jpeg")}
+                  disabled={!hasValue}
+                  size="sm"
+                >
+                  <Download className="size-3.5" />
+                  JPEG
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">Download as JPEG</TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="secondary"
+                  onClick={() => download("webp")}
+                  disabled={!hasValue}
+                  size="sm"
+                >
+                  <Download className="size-3.5" />
+                  WebP
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">Download as WebP</TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="secondary"
                   onClick={copyToClipboard}
                   disabled={!hasValue}
                   size="sm"
@@ -433,7 +506,7 @@ export function QRGenerator() {
           </div>
 
           {/* History */}
-          {history.entries.length > 0 && (
+          {historyEntries.length > 0 && (
             <div className="w-full max-w-md">
               <button
                 type="button"
@@ -441,7 +514,7 @@ export function QRGenerator() {
                 className="flex w-full items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
               >
                 <Clock className="size-3.5" />
-                Recent ({history.entries.length})
+                Recent ({historyEntries.length})
                 <span className="ml-auto text-[10px]">
                   {showHistory ? "Hide" : "Show"}
                 </span>
@@ -449,7 +522,7 @@ export function QRGenerator() {
 
               {showHistory && (
                 <div className="mt-3 flex flex-col gap-2">
-                  {history.entries.map((entry) => (
+                  {historyEntries.map((entry) => (
                     <div
                       key={entry.timestamp}
                       className="flex items-center gap-3 rounded-lg border p-2 transition-colors hover:bg-accent/50"
@@ -465,7 +538,9 @@ export function QRGenerator() {
                       <button
                         type="button"
                         className="min-w-0 flex-1 text-left"
-                        onClick={() => setConfig(entry.config)}
+                        onClick={() =>
+                          setConfig({ ...DEFAULT_CONFIG, ...entry.config })
+                        }
                       >
                         <p className="truncate text-sm">{entry.config.data}</p>
                         <p className="text-[10px] text-muted-foreground">
@@ -476,7 +551,7 @@ export function QRGenerator() {
                         variant="ghost"
                         size="icon"
                         className="size-6 shrink-0"
-                        onClick={() => history.remove(entry.timestamp)}
+                        onClick={() => historyRemove(entry.timestamp)}
                       >
                         <X className="size-3" />
                       </Button>
@@ -486,7 +561,7 @@ export function QRGenerator() {
                     variant="ghost"
                     size="sm"
                     className="text-xs text-muted-foreground"
-                    onClick={history.clear}
+                    onClick={historyClear}
                   >
                     <Trash2 className="size-3" />
                     Clear history
@@ -532,6 +607,28 @@ export function QRGenerator() {
 
             {/* Style Tab */}
             <TabsContent value="style" className="flex flex-col gap-5 pt-4">
+              <div className="flex flex-col gap-2.5">
+                <Label className="text-xs text-muted-foreground">Shape</Label>
+                <div className="flex gap-2">
+                  {SHAPE_OPTIONS.map((s) => (
+                    <Button
+                      key={s.value}
+                      variant={
+                        config.shape === s.value ? "default" : "secondary"
+                      }
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => update("shape", s.value)}
+                    >
+                      <s.icon className="size-3.5" />
+                      {s.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              <Separator />
+
               <div className="flex flex-col gap-2.5">
                 <Label className="text-xs text-muted-foreground">
                   Dot Style
@@ -671,6 +768,7 @@ export function QRGenerator() {
                   accept="image/*"
                   onChange={handleLogoUpload}
                   className="hidden"
+                  aria-label="Upload logo image"
                 />
               </div>
             </TabsContent>
@@ -682,6 +780,28 @@ export function QRGenerator() {
                 onChange={(v) => update("fgColor", v)}
                 label="Foreground"
               />
+
+              <div className="flex items-center justify-between">
+                <Label className="text-xs text-muted-foreground">
+                  Custom Corner Color
+                </Label>
+                <Switch
+                  checked={config.useCornerColor}
+                  onCheckedChange={(v) => update("useCornerColor", v)}
+                  size="sm"
+                />
+              </div>
+
+              {config.useCornerColor && (
+                <ColorInput
+                  value={config.cornerColor}
+                  onChange={(v) => update("cornerColor", v)}
+                  label="Corner Eyes"
+                />
+              )}
+
+              <Separator />
+
               <ColorInput
                 value={config.bgColor}
                 onChange={(v) => update("bgColor", v)}
@@ -699,11 +819,83 @@ export function QRGenerator() {
                 />
               </div>
 
+              {!config.transparentBg && (
+                <>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs text-muted-foreground">
+                      Background Gradient
+                    </Label>
+                    <Switch
+                      checked={config.bgUseGradient}
+                      onCheckedChange={(v) => update("bgUseGradient", v)}
+                      size="sm"
+                    />
+                  </div>
+
+                  {config.bgUseGradient && (
+                    <div className="flex flex-col gap-4">
+                      <ColorInput
+                        value={config.bgGradientColor1}
+                        onChange={(v) => update("bgGradientColor1", v)}
+                        label="BG Gradient Start"
+                      />
+                      <ColorInput
+                        value={config.bgGradientColor2}
+                        onChange={(v) => update("bgGradientColor2", v)}
+                        label="BG Gradient End"
+                      />
+                      <div className="flex flex-col gap-2.5">
+                        <Label className="text-xs text-muted-foreground">
+                          BG Gradient Type
+                        </Label>
+                        <Select
+                          value={config.bgGradientType}
+                          onValueChange={(v) =>
+                            update("bgGradientType", v as "linear" | "radial")
+                          }
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectGroup>
+                              <SelectItem value="linear">Linear</SelectItem>
+                              <SelectItem value="radial">Radial</SelectItem>
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {config.bgGradientType === "linear" && (
+                        <div className="flex flex-col gap-2.5">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs text-muted-foreground">
+                              BG Angle
+                            </Label>
+                            <span className="font-mono text-xs text-muted-foreground">
+                              {config.bgGradientRotation}°
+                            </span>
+                          </div>
+                          <Slider
+                            value={[config.bgGradientRotation]}
+                            onValueChange={([v]) =>
+                              update("bgGradientRotation", v)
+                            }
+                            min={0}
+                            max={360}
+                            step={15}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+
               <Separator />
 
               <div className="flex items-center justify-between">
                 <Label className="text-xs text-muted-foreground">
-                  Use Gradient
+                  Gradient
                 </Label>
                 <Switch
                   checked={config.useGradient}
@@ -745,6 +937,25 @@ export function QRGenerator() {
                       </SelectContent>
                     </Select>
                   </div>
+                  {config.gradientType === "linear" && (
+                    <div className="flex flex-col gap-2.5">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs text-muted-foreground">
+                          Angle
+                        </Label>
+                        <span className="font-mono text-xs text-muted-foreground">
+                          {config.gradientRotation}°
+                        </span>
+                      </div>
+                      <Slider
+                        value={[config.gradientRotation]}
+                        onValueChange={([v]) => update("gradientRotation", v)}
+                        min={0}
+                        max={360}
+                        step={15}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
             </TabsContent>

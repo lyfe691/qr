@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useCallback } from "react"
 import type { QRConfig } from "@/lib/qr-config"
 
 const STORAGE_KEY = "qr-history"
@@ -28,11 +28,7 @@ function persistEntries(entries: QRHistoryEntry[]) {
 }
 
 export function useQRHistory() {
-  const [entries, setEntries] = useState<QRHistoryEntry[]>([])
-
-  useEffect(() => {
-    setEntries(loadEntries())
-  }, [])
+  const [entries, setEntries] = useState<QRHistoryEntry[]>(loadEntries)
 
   const save = useCallback((config: QRConfig, thumbnail: string | null) => {
     if (!config.data.trim()) return
